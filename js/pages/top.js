@@ -87,7 +87,7 @@ const lyTop = {
             if (r != null) {
                 return decodeURI(r[2]);
             }
-            return null;
+            return "";
         }
     },
     created() {
