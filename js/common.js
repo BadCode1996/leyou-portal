@@ -518,14 +518,23 @@ axios.defaults.withCredentials = true
 
 // 配置对象
 const ly = leyou = {
+
+    /**
+     * 封装成全局方法 - 校验用户登录状态
+     * @returns {*}
+     */
+    verifyUser(){
+        return axios.get("/auth/verify");
+    },
+
     /**
      * 对encodeURI()编码过的 URI 进行解码。并且获取其中的指定参数
      * @param name
      * @returns {*}
      */
     getUrlParam(name) {
-        var reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)", "i");
-        var r = window.location.search.substr(1).match(reg);
+        const reg = new RegExp("(^|&)" + name + "=([^&]*)(&|$)", "i");
+        const r = window.location.search.substr(1).match(reg);
         if (r != null) {
             return decodeURI(r[2]);
         }

@@ -31,7 +31,7 @@
             <h4>全部商品<span>11</span></h4>
             <div class="cart-main">
                 <div class="yui3-g cart-th">
-                    <div class="yui3-u-1-4"><input type="checkbox"/> 全部</div>
+                    <div class="yui3-u-1-4"><input type="checkbox" v-model="selectAll" @click="selectedAll()"/> 全部</div>
                     <div class="yui3-u-1-4">商品</div>
                     <div class="yui3-u-1-8">单价（元）</div>
                     <div class="yui3-u-1-8">数量</div>
@@ -42,31 +42,35 @@
 
                     <div class="cart-body">
                         <div class="cart-list">
-                            <ul class="goods-list yui3-g">
+                            <ul class="goods-list yui3-g" v-for="(c,i) in carts" :key="i">
                                 <li class="yui3-u-1-24">
-                                    <input type="checkbox" name="" value="" />
+                                    <input type="checkbox" v-model="selected" :value="c"/>
                                 </li>
                                 <li class="yui3-u-11-24">
                                     <div class="good-item">
-                                        <div class="item-img"><img src="img/goods.png" width="80px" height="80px"/></div>
+                                        <div class="item-img"><img :src="c.image" width="80px" height="80px"/></div>
                                         <div class="item-msg">
 												<span style="line-height:70px ">
-													Apple Macbook Air 13.3英寸笔记本电脑 银色（Corei5）处理器/8GB内存
-														尺寸：13.3英寸
+                                                    {{c.title}}<br>
+                                                    <span v-for="(v,k) in JSON.parse(c.ownSpec)" :key="k">
+                                                        <!--{{k}}:{{v}}<br>-->
+                                                    </span>
 												</span>
                                         </div>
                                     </div>
                                 </li>
 
-                                <li class="yui3-u-1-8"><span style="line-height:70px " class="price">8848.00</span></li>
-                                <li class="yui3-u-1-8" style="padding-top: 20px">
-                                    <a href="javascript:void(0)" class="increment mins">-</a>
-                                    <input autocomplete="off" type="text" value="1" minnum="1" class="itxt" />
-                                    <a href="javascript:void(0)" class="increment plus">+</a>
+                                <li class="yui3-u-1-8"><span style="line-height:70px " class="price">{{ly.formatPrice(c.price)}}</span>
                                 </li>
-                                <li class="yui3-u-1-8"><span style="line-height:70px " class="sum">8848.00</span></li>
+                                <li class="yui3-u-1-8" style="padding-top: 20px">
+                                    <a href="javascript:void(0)" class="increment mins" @click="decrement(c)">-</a>
+                                    <input autocomplete="off" type="text" v-model="c.num" minnum="1" class="itxt"/>
+                                    <a href="javascript:void(0)" class="increment plus" @click="increment(c)">+</a>
+                                </li>
+                                <li class="yui3-u-1-8"><span style="line-height:70px " class="sum">{{ly.formatPrice(c.price * c.num)}}</span>
+                                </li>
                                 <li class="yui3-u-1-8">
-                                    <a href="#none">删除</a><br />
+                                    <a href="#none" @click="deleteCart(i)">删除</a><br/>
                                     <a href="#none">移到我的关注</a>
                                 </li>
                             </ul>
@@ -77,7 +81,7 @@
             </div>
             <div class="cart-tool">
                 <div class="select-all">
-                    <input type="checkbox" name="" id="" value=""/>
+                    <input type="checkbox" name="" id="" value="" v-model="selectAll" @click="selectedAll"/>
                     <span>全选</span>
                 </div>
                 <div class="option">
@@ -88,11 +92,11 @@
                 <div class="toolbar">
                     <div class="chosed">已选择<span>0</span>件商品</div>
                     <div class="sumprice">
-                        <span><em>总价（不含运费） ：</em><i class="summoney">8848.00</i></span>
+                        <span><em>总价（不含运费） ：</em><i class="summoney">{{ly.formatPrice(totalPrice)}}</i></span>
                         <span><em>已节省：</em><i>-¥20.00</i></span>
                     </div>
                     <div class="sumbtn">
-                        <a class="sum-btn"  href="getOrderInfo.html"  target="_blank">结算</a>
+                        <a class="sum-btn" href="#" @click.prevent="toOrderInfo" target="_blank">结算</a>
                     </div>
                 </div>
             </div>
@@ -264,9 +268,119 @@
     var cartVm = new Vue({
         el: "#cartApp",
         data: {
+            ly,
+            carts: [],
+            selected: [],   //选中的商品
+            selectAll: false, // 是否全选
+        },
+        created() {
+            this.loadCarts()
+                .then(()=>{
+                    this.carts = ly.store.get("selectedCarts") || [];
+                })
+                .catch(()=>{
+                    window.location.href = "/login.html?returnUrl=" + window.location.href;
+                })
+        },
+        computed: {
+            totalPrice() {
+                return this.selected.map(c => c.num * c.price).reduce((p1, p2) => p1 + p2, 0);
+            }
+        },
+        methods: {
+            loadCarts() {
+                //    先判断登录状态
+                ly.verifyUser()
+                    .then(() => {
+                        //    已登录
+                        ly.http.get("/cart").then(({data}) => {
+                            this.carts = data;
+                            this.selectAll = true;
+                        })
+                    })
+                    .catch(() => {
+                        //    未登录
+                        this.carts = ly.store.get("carts") || [];
+                        //初始化选中状态
+                        this.selected = this.carts;
+                        this.selectAll = !this.selectAll;
+                    })
+            },
+            decrement(c) {
+                if (c.num > 1) {
+                    c.num--;
+                }
+                ly.verifyUser()
+                    .then(() => {
+                        //    已登录，向后台发起请求
+                        ly.http.put("/cart",ly.stringify({skuId: c.skuId, num: c.num}))
+                    })
+                    .catch(() => {
+                        //    未登录，更新localstorage内数据
+                        ly.store.set("carts", this.carts);
+                    })
+            },
+            increment(c) {
+                c.num++;
+                ly.verifyUser()
+                    .then(() => {
+                        //    已登录，向后台发起请求
+                        ly.http.put("/cart",ly.stringify({skuId: c.skuId, num: c.num}))
+                    })
+                    .catch(() => {
+                        //    未登录，更新localstorage内数据
+                        ly.store.set("carts", this.carts);
+                    })
+            },
+            deleteCart(i) {
+                ly.verifyUser()
+                    .then(() => {
+                        //    已登录，向后台发起请求
+                        ly.http.delete("/cart/" + this.carts[i].skuId)
+                            .then(() => this.carts.splice(i,1))
+                    })
+                    .catch(() => {
+                        //    未登录，更新localstorage内数据
+                        //splice(index,howMany)用于删除数组中的元素,index从何处删除元素，howMany删除元素数量
+                        this.carts.splice(i, 1);
+                        ly.store.set("carts", this.carts);
+                    })
+            },
+            selectedAll() {
+                this.selectAll = !this.selectAll;
+                this.selected = this.selectAll ? this.carts : [];
+            },
+            toOrderInfo(){
+                ly.verifyUser()
+                    .then(()=>{
+                        //已登录
+                        ly.store.set("selectedCarts",this.selected);
+                        window.location.href = "/getOrderInfo.html"
+                    })
+                    .catch(()=>{
+                        //未登录
+                        window.location.href = "/login.html?returnUrl=" + window.location.href;
+                    })
+            }
         },
         components: {
             shortcut: () => import("/js/pages/shortcut.js")
+        },
+        watch:{
+            /*selectAll(val, oldVal) {
+                if (val) {
+                    this.selected = this.carts;
+                } else if (this.selected.length === this.carts.length) {
+                    this.selected = [];
+                }
+            },
+            selected: {
+                deep: true,
+                handler(val) {
+                    if (val.length === this.selected.length && !this.selectAll) this.selectAll = true;
+                    if (val.length !== this.selected.length && this.selectAll) this.selectAll = false;
+                }
+            }*/
         }
     })
 </script>
